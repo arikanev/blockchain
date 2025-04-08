@@ -84,27 +84,6 @@ def mine():
     else:
         return jsonify({"message": "Mining failed"}), 400
 
-@app.route("/bft/next_round", methods=["GET"])
-def bft_next_round():
-    """
-    If in BFT mode, propose and commit a block in a single step.
-    For demonstration, we skip actual communication.
-    """
-    if CONSENSUS_MODE != "bft":
-        return jsonify({"message": "BFT actions are only available in BFT mode"}), 400
-
-    proposed_block, proposer = bft_consensus.propose_block(blockchain)
-    commit_result = bft_consensus.vote_and_commit_block(blockchain, proposed_block)
-    bft_consensus.next_round()
-
-    if commit_result:
-        return jsonify({
-            "message": f"Block committed by proposer {proposer}",
-            "block": commit_result.to_dict()
-        }), 200
-    else:
-        return jsonify({"message": f"Block failed to commit (proposer was {proposer})"}), 200
-
 @app.route("/consensus_mode", methods=["POST"])
 def set_consensus_mode():
     """
@@ -119,6 +98,64 @@ def set_consensus_mode():
 
     CONSENSUS_MODE = mode
     return jsonify({"message": f"Consensus mode set to {mode}"}), 200
+
+@app.route("/bft/validators", methods=["GET"])
+def get_bft_validators():
+    if CONSENSUS_MODE != "bft":
+        return jsonify({"error": "Not in BFT mode"}), 400
+    return jsonify({"validators": bft_consensus.get_validators()}), 200
+
+@app.route("/bft/propose", methods=["POST"])
+def bft_propose():
+    if CONSENSUS_MODE != "bft":
+        return jsonify({"error": "Not in BFT mode"}), 400
+    
+    if not blockchain.current_transactions:
+        return jsonify({"message": "No pending transactions to propose."}), 200
+
+    proposal = bft_consensus.propose_block(blockchain)
+    if not proposal:
+         return jsonify({"error": "Failed to create proposal"}), 500
+
+    return jsonify({
+        "message": f"Validator {proposal['proposer']} proposed Block {proposal['block'].index}",
+        "proposal": {
+             "proposer": proposal['proposer'],
+             "block_index": proposal['block'].index,
+             "block_hash": proposal['block'].hash
+        }
+    }), 200
+
+@app.route("/bft/vote", methods=["POST"])
+def bft_vote():
+    if CONSENSUS_MODE != "bft":
+        return jsonify({"error": "Not in BFT mode"}), 400
+    
+    votes = bft_consensus.simulate_votes()
+    if votes is None:
+        return jsonify({"error": "No active proposal to vote on. Please propose first."}), 400
+        
+    return jsonify({
+        "message": "Votes simulated.",
+        "votes": votes,
+        "required_threshold": (2 * len(bft_consensus.get_validators())) // 3 + 1
+    }), 200
+
+@app.route("/bft/commit", methods=["POST"])
+def bft_commit():
+    if CONSENSUS_MODE != "bft":
+        return jsonify({"error": "Not in BFT mode"}), 400
+    
+    committed_block, message = bft_consensus.commit_block(blockchain)
+    
+    if committed_block:
+        return jsonify({
+            "message": message,
+            "block": committed_block.to_dict()
+        }), 200
+    else:
+        status_code = 400 if "Consensus failed" in message else 500
+        return jsonify({"error": message}), status_code
 
 if __name__ == "__main__":
     # Run Flask app

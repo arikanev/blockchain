@@ -3,12 +3,106 @@
   <head>
     <meta charset="UTF-8" />
     <title>Educational Blockchain Demo</title>
-    <link rel="stylesheet" href="/static/main.css" />
+    <style>
+        body { font-family: sans-serif; }
+        .blockchain-container {
+            display: flex;
+            flex-wrap: wrap; /* Allow blocks to wrap */
+            align-items: flex-start; /* Align tops */
+            padding: 20px;
+            overflow-x: auto; /* Add horizontal scroll if needed */
+            gap: 40px; /* Spacing between blocks including connector */
+            position: relative; /* For absolute positioning of connectors */
+        }
+        .block {
+            border: 2px solid #333;
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            min-width: 250px; /* Ensure blocks have some width */
+            position: relative; /* For connector positioning and pseudo-elements */
+            box-shadow: 3px 3px 5px #ccc;
+        }
+        .block h4 { margin-top: 0; }
+        .block-details { font-size: 0.9em; }
+        .block-details strong { display: inline-block; min-width: 100px; } /* Align keys */
+        .block-details pre {
+            background-color: #e0e0e0;
+            padding: 5px;
+            border-radius: 4px;
+            overflow-x: auto; /* Scroll long transactions */
+            white-space: pre-wrap; /* Wrap long lines */
+            word-wrap: break-word;
+        }
+        /* Simple connector line */
+        .connector {
+            position: absolute;
+            top: 50%;
+            left: 100%; /* Start from the right edge of the block */
+            width: 40px; /* Length of the connector */
+            height: 3px;
+            background-color: #333;
+            transform: translateY(-50%); /* Center vertically */
+            z-index: -1; /* Behind the next block */
+        }
+        /* Hide connector for the last block */
+        .block:last-child .connector {
+            display: none;
+        }
+        button { margin: 5px; padding: 8px 12px; }
+        input { margin: 5px; padding: 8px; }
+        hr { margin: 20px 0; }
+        #status { margin-top: 15px; font-weight: bold; }
+        /* Style for PoW blocks */
+        .block-pow {
+            border-color: #a0a0ff; /* Light blue border */
+            background-color: #f0f0ff;
+        }
+        /* Style for BFT blocks */
+        .block-bft {
+            border-color: #a0ffa0; /* Light green border */
+            background-color: #f0fff0;
+        }
+        /* Style for Genesis block */
+        .block-genesis {
+            border-color: #f0a0a0; /* Light red border */
+            background-color: #fff0f0;
+        }
+        .block::after { /* Add text indicator */
+            content: attr(data-consensus-method);
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #555;
+            text-transform: uppercase;
+        }
+        .block-pow::after { color: #3333cc; }
+        .block-bft::after { color: #33cc33; }
+        .block-genesis::after { color: #cc3333; }
+        #bft-status {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            min-height: 50px;
+        }
+        .validator-vote {
+            margin: 5px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            display: inline-block;
+            min-width: 100px;
+            text-align: center;
+        }
+        .vote-yes { background-color: #d0ffd0; border-color: #8f8; }
+        .vote-no { background-color: #ffd0d0; border-color: #f88; }
+    </style>
   </head>
   <body>
     <h1>Educational Blockchain Demo</h1>
     <div>
-      <button onclick="loadChain()">Load Chain</button>
+      <button onclick="loadChain()">Load/Refresh Chain</button>
       <button onclick="switchToPoW()">Switch to PoW</button>
       <button onclick="switchToBFT()">Switch to BFT</button>
     </div>
@@ -21,11 +115,26 @@
     </div>
     <div>
       <h3>Consensus Actions</h3>
-      <button onclick="mineBlock()">Mine (PoW)</button>
-      <button onclick="bftNextRound()">Next Round (BFT)</button>
+      <button onclick="mineBlock()">Mine Block (PoW)</button>
     </div>
+
+    <div id="bft-controls" style="display: none;"> <!-- Hidden initially, shown when BFT mode active -->
+        <h4>BFT Consensus Round</h4>
+        <button onclick="bftPropose()" id="bft-propose-btn">1. Propose Block</button>
+        <button onclick="bftVote()" id="bft-vote-btn" disabled>2. Simulate Votes</button>
+        <button onclick="bftCommit()" id="bft-commit-btn" disabled>3. Attempt Commit</button>
+        <div id="bft-status">
+            <!-- BFT status messages and votes will appear here -->
+            Waiting for BFT actions...
+        </div>
+    </div>
+
     <hr />
-    <pre id="chainData"></pre>
+    <h3>Blockchain Visualizer (<span id="consensus-mode">N/A</span> mode)</h3>
+    <div id="blockchain-visualizer" class="blockchain-container">
+        <!-- Blocks will be dynamically inserted here -->
+    </div>
+    <div id="status"></div> <!-- For messages -->
     <script src="/static/main.js"></script>
   </body>
 </html>

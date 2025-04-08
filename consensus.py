@@ -23,7 +23,8 @@ class ProofOfWork:
             index=index,
             transactions=transactions,
             timestamp=time.time(),
-            previous_hash=last_block.hash
+            previous_hash=last_block.hash,
+            consensus_method="pow"
         )
 
         # Very naive coin reward
@@ -57,6 +58,7 @@ class ProofOfWork:
 class TendermintBFT:
     """
     A simplified Tendermint-inspired BFT mechanism.
+    Simulates proposal, voting, and commit phases.
     """
 
     def __init__(self, validators=None):
@@ -65,49 +67,104 @@ class TendermintBFT:
         self.validators = validators if validators else ["valA", "valB", "valC"]
         # A naive approach: each "round" has one proposer
         self.round_robin_index = 0
+        # Temporary storage for demo purposes (Not suitable for real apps)
+        self.current_proposal = None
+        self.current_votes = None
 
     def propose_block(self, blockchain):
         """
-        The next validator in the round-robin proposes a block containing
-        current transactions. We'll pretend there's immediate network communication.
+        Proposes a block but does not commit it yet.
+        Stores the proposal internally for the voting step.
         """
         proposer = self.validators[self.round_robin_index]
         last_block = blockchain.get_last_block()
         index = len(blockchain.chain)
         transactions = blockchain.current_transactions.copy()
 
-        block = Block(
+        proposed_block = Block(
             index=index,
             transactions=transactions,
             timestamp=time.time(),
             previous_hash=last_block.hash,
-            nonce=0,  # not relevant for BFT
-            signatures=[]
+            nonce=0,
+            signatures=[],
+            consensus_method="bft"
         )
-        block.hash = block.compute_hash()
-        return block, proposer
+        # Calculate hash now, it's needed for voting reference
+        proposed_block.hash = proposed_block.compute_hash()
 
-    def vote_and_commit_block(self, blockchain, block):
+        # Store proposal for subsequent steps (demo only)
+        self.current_proposal = {
+            'block': proposed_block,
+            'proposer': proposer
+        }
+        self.current_votes = None # Clear previous votes
+
+        return self.current_proposal # Return the proposal details
+
+    def simulate_votes(self):
         """
-        Each validator "votes" on the proposed block.
-        If enough votes (2/3) are collected, we consider the block committed.
+        Simulates validators voting on the current proposal.
+        Requires propose_block to have been called first.
+        Returns a dictionary of votes: {validator: 'yes'/'no'}.
         """
-        # Let's pretend each validator randomly decides to vote yes for simplicity
-        approvals = []
+        if not self.current_proposal:
+            return None # No proposal to vote on
+
+        votes = {}
         for val in self.validators:
-            if random.random() > 0.1:  # 90% chance to vote yes
-                approvals.append(val)
+            # Simulate voting logic (e.g., random chance)
+            # Could be modified later to simulate faults
+            if random.random() > 0.1: # 90% chance to vote yes
+                votes[val] = 'yes'
+            else:
+                votes[val] = 'no'
 
-        # If we have 2/3 approvals, the block is committed
+        self.current_votes = votes # Store votes (demo only)
+        return self.current_votes
+
+    def commit_block(self, blockchain):
+        """
+        Checks the votes for the current proposal and commits the block
+        to the blockchain if the threshold is met.
+        Requires propose_block and simulate_votes to have been called.
+        """
+        if not self.current_proposal or not self.current_votes:
+            print("[Error] Cannot commit: Proposal or votes missing.")
+            return None, "Commit failed: Missing proposal or votes."
+
+        approvals = [val for val, vote in self.current_votes.items() if vote == 'yes']
         threshold = (2 * len(self.validators)) // 3 + 1
+
         if len(approvals) >= threshold:
-            block.signatures = approvals  # store approvals in block
-            # Add block to the chain
-            added = blockchain.add_block(block)
+            block_to_commit = self.current_proposal['block']
+            block_to_commit.signatures = approvals # Store who approved
+
+            # Add block to the actual chain
+            added = blockchain.add_block(block_to_commit)
             if added:
                 blockchain.clear_transactions()
-                return block
-        return None
+                proposer = self.current_proposal['proposer']
+                message = f"Consensus reached! Block {block_to_commit.index} committed by {proposer}."
+                result_block = block_to_commit
+            else:
+                # This case shouldn't ideally happen if propose was based on latest chain state
+                message = "Commit failed: Blockchain rejected the block."
+                result_block = None
+        else:
+            message = f"Consensus failed: Only {len(approvals)}/{len(self.validators)} votes received (threshold {threshold})."
+            result_block = None
+
+        # Clear state for next round and advance proposer
+        self.current_proposal = None
+        self.current_votes = None
+        self.next_round()
+
+        return result_block, message
+
+    def get_validators(self):
+        """ Simple helper to get validator list """
+        return self.validators
 
     def next_round(self):
         self.round_robin_index = (self.round_robin_index + 1) % len(self.validators)

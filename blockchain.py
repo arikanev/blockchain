@@ -72,14 +72,16 @@ class Block:
     - nonce (used in PoW) or round info (used in BFT)
     - hash (once calculated)
     - signatures (for BFT, if used)
+    - consensus_method (e.g., 'pow', 'bft')
     """
-    def __init__(self, index, transactions, timestamp, previous_hash, nonce=0, signatures=None):
+    def __init__(self, index, transactions, timestamp, previous_hash, nonce=0, signatures=None, consensus_method=None):
         self.index = index
         self.transactions = transactions  # list of transaction dicts
         self.timestamp = timestamp
         self.previous_hash = previous_hash
         self.nonce = nonce
         self.signatures = signatures if signatures else []  # BFT: list of validator sigs
+        self.consensus_method = consensus_method # Added: 'pow' or 'bft'
         self.hash = None
 
     def compute_hash(self):
@@ -92,7 +94,8 @@ class Block:
             'timestamp': self.timestamp,
             'previous_hash': self.previous_hash,
             'nonce': self.nonce,
-            'signatures': self.signatures
+            'signatures': self.signatures,
+            'consensus_method': self.consensus_method # Added
         }, sort_keys=True)
         return hashlib.sha256(block_string.encode()).hexdigest()
 
@@ -104,6 +107,7 @@ class Block:
             'previous_hash': self.previous_hash,
             'nonce': self.nonce,
             'signatures': self.signatures,
+            'consensus_method': self.consensus_method, # Added
             'hash': self.hash
         }
 
@@ -121,7 +125,8 @@ class Blockchain:
             timestamp=time.time(),
             previous_hash="0",
             nonce=0,
-            signatures=[]
+            signatures=[],
+            consensus_method="genesis" # Added
         )
         genesis_block.hash = genesis_block.compute_hash()
         self.chain.append(genesis_block)
