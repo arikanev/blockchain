@@ -6,8 +6,11 @@ const bftStatusElement = document.getElementById("bft-status");
 const bftProposeBtn = document.getElementById("bft-propose-btn");
 const bftVoteBtn = document.getElementById("bft-vote-btn");
 const bftCommitBtn = document.getElementById("bft-commit-btn");
+const posControlsElement = document.getElementById("pos-controls");
+const stakesListElement = document.getElementById("stakes-list");
 
 let currentValidators = []; // To store validator list
+let selectedValidator = null;
 
 function updateStatus(message, isError = false) {
     statusElement.textContent = message;
@@ -24,6 +27,21 @@ async function loadChain() {
 
         chainContainer.innerHTML = ""; // Clear previous blocks
         consensusModeElement.textContent = data.consensus_mode || 'N/A'; // Update consensus mode display
+
+        // Show/hide consensus controls based on mode
+        if (data.consensus_mode === 'bft') {
+            bftControlsElement.style.display = 'block';
+            posControlsElement.style.display = 'none';
+            resetBftControls();
+            fetchValidators();
+        } else if (data.consensus_mode === 'pos') {
+            bftControlsElement.style.display = 'none';
+            posControlsElement.style.display = 'block';
+            loadStakes();
+        } else {
+            bftControlsElement.style.display = 'none';
+            posControlsElement.style.display = 'none';
+        }
 
         if (!data.chain || data.chain.length === 0) {
             chainContainer.innerHTML = "<p>No blocks in the chain yet.</p>";
@@ -76,15 +94,6 @@ async function loadChain() {
             blockElement.innerHTML = blockHTML;
             chainContainer.appendChild(blockElement);
         });
-
-        // Show/hide BFT controls based on mode
-        if (data.consensus_mode === 'bft') {
-            bftControlsElement.style.display = 'block';
-            resetBftControls(); // Reset buttons on load
-            fetchValidators(); // Fetch validator list for display
-        } else {
-            bftControlsElement.style.display = 'none';
-        }
 
         updateStatus("Blockchain loaded successfully.");
 
@@ -302,6 +311,130 @@ function switchToPoW() {
 
 function switchToBFT() {
     switchConsensus('bft');
+}
+
+// --- PoS Functions ---
+
+async function loadStakes() {
+    try {
+        const response = await fetch("/pos/stakes");
+        if (!response.ok) throw new Error("Failed to fetch stakes");
+        const data = await response.json();
+
+        let stakesHTML = `<p><strong>Minimum Stake Required:</strong> ${data.min_stake}</p>`;
+        stakesHTML += '<div class="stakes-grid">';
+        
+        for (const [validator, stake] of Object.entries(data.stakes)) {
+            const isSelected = validator === selectedValidator;
+            stakesHTML += `
+                <div class="validator-stake ${isSelected ? 'selected' : ''}" 
+                     onclick="selectValidator('${validator}')">
+                    <strong>${validator}</strong><br>
+                    Stake: ${stake}
+                </div>`;
+        }
+        stakesHTML += '</div>';
+        stakesListElement.innerHTML = stakesHTML;
+    } catch (error) {
+        console.error("Error loading stakes:", error);
+        updateStatus("Failed to load stakes: " + error.message, true);
+    }
+}
+
+function selectValidator(validator) {
+    selectedValidator = validator;
+    loadStakes(); // Refresh display to show selection
+}
+
+async function addStake() {
+    const validator = document.getElementById("stake-validator").value;
+    const amount = parseFloat(document.getElementById("stake-amount").value);
+
+    if (!validator || isNaN(amount) || amount <= 0) {
+        updateStatus("Please enter valid validator address and amount", true);
+        return;
+    }
+
+    try {
+        const response = await fetch("/pos/stake", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ validator, amount })
+        });
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || "Failed to add stake");
+
+        updateStatus(data.message);
+        document.getElementById("stake-validator").value = "";
+        document.getElementById("stake-amount").value = "";
+        loadStakes();
+    } catch (error) {
+        console.error("Error adding stake:", error);
+        updateStatus("Failed to add stake: " + error.message, true);
+    }
+}
+
+async function removeStake() {
+    const validator = document.getElementById("stake-validator").value;
+    const amount = parseFloat(document.getElementById("stake-amount").value);
+
+    if (!validator || isNaN(amount) || amount <= 0) {
+        updateStatus("Please enter valid validator address and amount", true);
+        return;
+    }
+
+    try {
+        const response = await fetch("/pos/unstake", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ validator, amount })
+        });
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || "Failed to remove stake");
+
+        updateStatus(data.message);
+        document.getElementById("stake-validator").value = "";
+        document.getElementById("stake-amount").value = "";
+        loadStakes();
+    } catch (error) {
+        console.error("Error removing stake:", error);
+        updateStatus("Failed to remove stake: " + error.message, true);
+    }
+}
+
+async function createPosBlock(validator = null) {
+    try {
+        const response = await fetch("/pos/create_block", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ validator })
+        });
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || "Failed to create block");
+
+        updateStatus(data.message);
+        loadChain();
+    } catch (error) {
+        console.error("Error creating PoS block:", error);
+        updateStatus("Failed to create block: " + error.message, true);
+    }
+}
+
+function createPosBlockWithValidator() {
+    if (!selectedValidator) {
+        updateStatus("Please select a validator first", true);
+        return;
+    }
+    createPosBlock(selectedValidator);
+}
+
+// --- Consensus Mode Switching ---
+
+function switchToPoS() {
+    switchConsensus('pos');
 }
 
 // Load the chain initially when the page loads

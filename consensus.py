@@ -1,7 +1,9 @@
 import time
 import json
 import random
+import hashlib
 from blockchain import Block
+from stake import StakeManager
 
 DIFFICULTY_PREFIX = "0000"  # Low difficulty for faster demonstration
 
@@ -168,3 +170,91 @@ class TendermintBFT:
 
     def next_round(self):
         self.round_robin_index = (self.round_robin_index + 1) % len(self.validators)
+
+class ProofOfStake:
+    """
+    A simple Proof of Stake mechanism.
+    Validators are selected based on their stake to create new blocks.
+    """
+    def __init__(self):
+        self.stake_manager = StakeManager()
+        # For demo, add some initial stakes
+        self._add_initial_stakes()
+
+    def _add_initial_stakes(self):
+        """Add some demo stakes."""
+        initial_stakes = {
+            "alice": 100.0,
+            "bob": 50.0,
+            "charlie": 25.0
+        }
+        for validator, amount in initial_stakes.items():
+            self.stake_manager.add_stake(validator, amount, time.time())
+
+    def get_stakes(self):
+        """Get current stakes for all validators."""
+        return self.stake_manager.get_all_stakes()
+
+    def add_stake(self, validator: str, amount: float):
+        """Add stake for a validator."""
+        return self.stake_manager.add_stake(validator, amount, time.time())
+
+    def remove_stake(self, validator: str, amount: float):
+        """Remove stake from a validator."""
+        return self.stake_manager.remove_stake(validator, amount)
+
+    def create_block(self, blockchain, validator_address: str = None):
+        """
+        Create a new block using PoS.
+        If validator_address is provided, verify they're eligible.
+        Otherwise, select a validator based on stake.
+        """
+        # Get last block hash as seed for deterministic selection
+        last_block = blockchain.get_last_block()
+        seed = last_block.hash.encode('utf-8')
+
+        # Select validator if not provided
+        if not validator_address:
+            validator_address, stake = self.stake_manager.select_validator(seed)
+            if not validator_address:
+                return None, "No eligible validators"
+        else:
+            # Verify provided validator is eligible
+            if not self.stake_manager.is_validator(validator_address):
+                return None, f"Address {validator_address} is not an eligible validator"
+            stake = self.stake_manager.get_stake(validator_address)
+
+        # Create the new block
+        index = len(blockchain.chain)
+        transactions = blockchain.current_transactions.copy()
+
+        # Add validator reward (proportional to stake)
+        reward = min(1.0, stake / 100.0)  # Max 1.0 reward, scales with stake
+        reward_tx = {
+            "sender": "NETWORK",
+            "recipient": validator_address,
+            "amount": reward,
+            "signature": None,
+            "type": "pos_reward"
+        }
+        transactions.append(reward_tx)
+
+        # Create and add the block
+        new_block = Block(
+            index=index,
+            transactions=transactions,
+            timestamp=time.time(),
+            previous_hash=last_block.hash,
+            consensus_method="pos"  # Mark as PoS block
+        )
+        
+        # Instead of PoW, we'll use a simple hash
+        new_block.hash = new_block.compute_hash()
+        
+        # Try to add to chain
+        added = blockchain.add_block(new_block)
+        if added:
+            blockchain.clear_transactions()
+            return new_block, f"Block created by validator {validator_address} (stake: {stake})"
+        
+        return None, "Failed to add block to chain"

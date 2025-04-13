@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from blockchain import Blockchain, Transaction
-from consensus import ProofOfWork, TendermintBFT
+from consensus import ProofOfWork, TendermintBFT, ProofOfStake
 import json
 import os
 
@@ -9,11 +9,12 @@ app = Flask(__name__)
 # Global blockchain instance (not thread-safe for real usage)
 blockchain = Blockchain()
 
-# Choose consensus: "pow" or "bft"
+# Choose consensus: "pow", "bft", or "pos"
 CONSENSUS_MODE = os.environ.get("CONSENSUS_MODE", "pow")
 
 pow_consensus = ProofOfWork()
 bft_consensus = TendermintBFT(validators=["valA", "valB", "valC"])
+pos_consensus = ProofOfStake()  # Initialize PoS
 
 # For demonstration, let's create a single ephemeral key pair for signing
 # In real usage, each user would generate their own.
@@ -87,13 +88,13 @@ def mine():
 @app.route("/consensus_mode", methods=["POST"])
 def set_consensus_mode():
     """
-    Dynamically switch between PoW and BFT. 
+    Dynamically switch between PoW, BFT, and PoS.
     This is not typical in real blockchains but useful for demonstration.
     """
     global CONSENSUS_MODE
     values = request.get_json()
     mode = values.get("mode")
-    if mode not in ["pow", "bft"]:
+    if mode not in ["pow", "bft", "pos"]:  # Added "pos"
         return jsonify({"message": "Invalid consensus mode"}), 400
 
     CONSENSUS_MODE = mode
@@ -156,6 +157,95 @@ def bft_commit():
     else:
         status_code = 400 if "Consensus failed" in message else 500
         return jsonify({"error": message}), status_code
+
+# --- New PoS Endpoints ---
+
+@app.route("/pos/stakes", methods=["GET"])
+def get_stakes():
+    """Get current stakes for all validators."""
+    if CONSENSUS_MODE != "pos":
+        return jsonify({"error": "Not in PoS mode"}), 400
+    
+    stakes = pos_consensus.get_stakes()
+    return jsonify({
+        "stakes": stakes,
+        "min_stake": pos_consensus.stake_manager.MIN_STAKE
+    }), 200
+
+@app.route("/pos/stake", methods=["POST"])
+def add_stake():
+    """Add stake for a validator."""
+    if CONSENSUS_MODE != "pos":
+        return jsonify({"error": "Not in PoS mode"}), 400
+    
+    values = request.get_json()
+    if not all(k in values for k in ["validator", "amount"]):
+        return jsonify({"error": "Missing values"}), 400
+    
+    validator = values["validator"]
+    try:
+        amount = float(values["amount"])
+    except ValueError:
+        return jsonify({"error": "Invalid amount"}), 400
+
+    if amount <= 0:
+        return jsonify({"error": "Amount must be positive"}), 400
+
+    success = pos_consensus.add_stake(validator, amount)
+    if success:
+        return jsonify({
+            "message": f"Added stake {amount} for {validator}",
+            "new_stake": pos_consensus.stake_manager.get_stake(validator)
+        }), 200
+    else:
+        return jsonify({"error": "Failed to add stake"}), 400
+
+@app.route("/pos/unstake", methods=["POST"])
+def remove_stake():
+    """Remove stake from a validator."""
+    if CONSENSUS_MODE != "pos":
+        return jsonify({"error": "Not in PoS mode"}), 400
+    
+    values = request.get_json()
+    if not all(k in values for k in ["validator", "amount"]):
+        return jsonify({"error": "Missing values"}), 400
+    
+    validator = values["validator"]
+    try:
+        amount = float(values["amount"])
+    except ValueError:
+        return jsonify({"error": "Invalid amount"}), 400
+
+    if amount <= 0:
+        return jsonify({"error": "Amount must be positive"}), 400
+
+    success = pos_consensus.remove_stake(validator, amount)
+    if success:
+        new_stake = pos_consensus.stake_manager.get_stake(validator)
+        return jsonify({
+            "message": f"Removed stake {amount} from {validator}",
+            "new_stake": new_stake
+        }), 200
+    else:
+        return jsonify({"error": "Failed to remove stake"}), 400
+
+@app.route("/pos/create_block", methods=["POST"])
+def pos_create_block():
+    """Create a new block using PoS."""
+    if CONSENSUS_MODE != "pos":
+        return jsonify({"error": "Not in PoS mode"}), 400
+    
+    values = request.get_json()
+    validator = values.get("validator") if values else None  # Optional
+
+    new_block, message = pos_consensus.create_block(blockchain, validator)
+    if new_block:
+        return jsonify({
+            "message": message,
+            "block": new_block.to_dict()
+        }), 200
+    else:
+        return jsonify({"error": message}), 400
 
 if __name__ == "__main__":
     # Run Flask app

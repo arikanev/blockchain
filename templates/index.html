@@ -97,6 +97,37 @@
         }
         .vote-yes { background-color: #d0ffd0; border-color: #8f8; }
         .vote-no { background-color: #ffd0d0; border-color: #f88; }
+        /* PoS specific styles */
+        #pos-controls {
+            display: none;
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px dashed #ccc;
+        }
+        .stake-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .validator-stake {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .validator-stake.selected {
+            border-color: #4CAF50;
+            background: #E8F5E9;
+        }
+        /* Block type indicators */
+        .block-pos {
+            border-color: #9C27B0;
+            background-color: #F3E5F5;
+        }
+        .block-pos::after { color: #9C27B0; }
     </style>
   </head>
   <body>
@@ -105,6 +136,7 @@
       <button onclick="loadChain()">Load/Refresh Chain</button>
       <button onclick="switchToPoW()">Switch to PoW</button>
       <button onclick="switchToBFT()">Switch to BFT</button>
+      <button onclick="switchToPoS()">Switch to PoS</button>
     </div>
     <div>
       <h3>Create a Transaction</h3>
@@ -126,6 +158,28 @@
         <div id="bft-status">
             <!-- BFT status messages and votes will appear here -->
             Waiting for BFT actions...
+        </div>
+    </div>
+
+    <div id="pos-controls">
+        <h4>Proof of Stake Controls</h4>
+        <div class="stake-info">
+            <h5>Current Stakes</h5>
+            <div id="stakes-list">
+                <!-- Stakes will be listed here -->
+            </div>
+        </div>
+        <div>
+            <h5>Manage Stakes</h5>
+            <input type="text" id="stake-validator" placeholder="Validator Address">
+            <input type="number" id="stake-amount" placeholder="Amount" step="0.1" min="0">
+            <button onclick="addStake()">Add Stake</button>
+            <button onclick="removeStake()">Remove Stake</button>
+        </div>
+        <div>
+            <h5>Create Block</h5>
+            <button onclick="createPosBlock()">Create Block (Auto-select Validator)</button>
+            <button onclick="createPosBlockWithValidator()">Create Block with Selected Validator</button>
         </div>
     </div>
 

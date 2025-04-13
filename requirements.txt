@@ -1,4 +1,4 @@
-Flask==2.2.3
+Flask==3.0.2
 requests==2.28.2
-cryptography==41.0.1
+cryptography==42.0.5
 Werkzeug<3.0.0
