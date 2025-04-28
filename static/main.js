@@ -8,6 +8,7 @@ const bftVoteBtn = document.getElementById("bft-vote-btn");
 const bftCommitBtn = document.getElementById("bft-commit-btn");
 const posControlsElement = document.getElementById("pos-controls");
 const stakesListElement = document.getElementById("stakes-list");
+const mempoolListElement = document.getElementById("mempool-list");
 
 let currentValidators = []; // To store validator list
 let selectedValidator = null;
@@ -96,6 +97,9 @@ async function loadChain() {
         });
 
         updateStatus("Blockchain loaded successfully.");
+
+        // Also load the mempool
+        loadMempool();
 
     } catch (error) {
         console.error("Failed to load chain:", error);
@@ -206,6 +210,7 @@ async function bftCommit() {
         bftStatusElement.innerHTML += `<br><strong>${data.message}</strong>`;
         if (data.block) {
             loadChain(); // Success! Reload the chain
+            loadMempool(); // Refresh mempool (should be empty)
         } else {
             // Consensus failed, just update status
             resetBftControls(); // Allow trying again (propose)
@@ -244,6 +249,10 @@ async function createTransaction() {
         document.getElementById("sender").value = '';
         document.getElementById("recipient").value = '';
         document.getElementById("amount").value = '';
+
+        // Refresh the mempool view
+        loadMempool();
+
     } catch (error) {
         console.error("Failed to create transaction:", error);
         updateStatus("Error creating transaction: " + error.message, true);
@@ -261,6 +270,7 @@ async function mineBlock() {
         }
         updateStatus(data.message + (data.block ? ` Block Index: ${data.block.index}` : ''));
         loadChain(); // Refresh the chain view
+        loadMempool(); // Refresh the mempool view (should be empty now)
     } catch (error) {
         console.error("Mining failed:", error);
         updateStatus("Mining failed: " + error.message, true);
@@ -416,7 +426,8 @@ async function createPosBlock(validator = null) {
         if (!response.ok) throw new Error(data.error || "Failed to create block");
 
         updateStatus(data.message);
-        loadChain();
+        loadChain(); // Refresh chain
+        loadMempool(); // Refresh mempool
     } catch (error) {
         console.error("Error creating PoS block:", error);
         updateStatus("Failed to create block: " + error.message, true);
@@ -431,6 +442,33 @@ function createPosBlockWithValidator() {
     createPosBlock(selectedValidator);
 }
 
+async function simulatePosMalice() {
+    if (!selectedValidator) {
+        updateStatus("Please select a validator to simulate malice for", true);
+        return;
+    }
+
+    updateStatus(`Simulating malice for validator ${selectedValidator}...`);
+    try {
+        const response = await fetch("/pos/simulate_malice", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ validator: selectedValidator })
+        });
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || "Failed to simulate malice");
+
+        updateStatus(data.message); // Display success/slashing message
+        loadStakes(); // Refresh the stakes list to show reduced stake
+        selectedValidator = null; // Deselect validator after action
+
+    } catch (error) {
+        console.error("Error simulating PoS malice:", error);
+        updateStatus("Failed to simulate malice: " + error.message, true);
+    }
+}
+
 // --- Consensus Mode Switching ---
 
 function switchToPoS() {
@@ -439,3 +477,27 @@ function switchToPoS() {
 
 // Load the chain initially when the page loads
 document.addEventListener('DOMContentLoaded', loadChain);
+
+async function loadMempool() {
+    try {
+        const response = await fetch("/mempool");
+        if (!response.ok) throw new Error("Failed to fetch mempool");
+        const data = await response.json();
+
+        mempoolListElement.innerHTML = ""; // Clear previous list
+        if (data.transactions && data.transactions.length > 0) {
+            data.transactions.forEach(tx => {
+                const txElement = document.createElement("div");
+                txElement.classList.add("mempool-tx");
+                // Basic display, could be more detailed
+                txElement.textContent = `From: ${tx.sender}, To: ${tx.recipient}, Amount: ${tx.amount}`;
+                mempoolListElement.appendChild(txElement);
+            });
+        } else {
+            mempoolListElement.innerHTML = "<p><small>No pending transactions.</small></p>";
+        }
+    } catch (error) {
+        console.error("Error loading mempool:", error);
+        mempoolListElement.innerHTML = `<p><small style="color: red;">Error loading mempool: ${error.message}</small></p>`;
+    }
+}

@@ -89,4 +89,26 @@ class StakeManager:
 
     def is_validator(self, address: str) -> bool:
         """Check if an address is a current validator."""
-        return address in self.stakes and self.stakes[address] >= self.MIN_STAKE 
+        return address in self.stakes and self.stakes[address] >= self.MIN_STAKE
+
+    def slash_stake(self, validator: str, percentage: float = 0.1) -> Tuple[bool, float]:
+        """
+        Reduce a validator's stake by a percentage for misbehavior.
+        Returns (success, slashed_amount).
+        """
+        if validator not in self.stakes:
+            return False, 0.0
+        
+        current_stake = self.stakes[validator]
+        slashed_amount = current_stake * percentage
+        
+        self.stakes[validator] -= slashed_amount
+        print(f"[PoS Slashing] Slashed {slashed_amount:.2f} from {validator}. New stake: {self.stakes[validator]:.2f}")
+        
+        # Check if stake falls below minimum after slashing
+        if self.stakes[validator] < self.MIN_STAKE:
+            print(f"[PoS Slashing] Validator {validator} stake fell below minimum after slashing. Removing validator.")
+            del self.stakes[validator]
+            del self.stake_timestamps[validator]
+            
+        return True, slashed_amount 

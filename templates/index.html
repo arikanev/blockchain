@@ -128,22 +128,67 @@
             background-color: #F3E5F5;
         }
         .block-pos::after { color: #9C27B0; }
+        /* Mempool styles */
+        #mempool-container {
+            float: right; /* Position next to transaction form */
+            width: 45%;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px dashed #aaa;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto; /* Add scroll for many transactions */
+            background-color: #f9f9f9;
+        }
+        #mempool-container h4 {
+            margin-top: 0;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+        }
+        .mempool-tx {
+            font-size: 0.9em;
+            padding: 5px;
+            margin-bottom: 5px;
+            border: 1px solid #eee;
+            background-color: #fff;
+            word-wrap: break-word;
+        }
+        /* Adjust transaction form width */
+        #transaction-form {
+            float: left;
+            width: 50%;
+        }
+        .clearfix::after { /* To clear floats */
+            content: "";
+            clear: both;
+            display: table;
+        }
     </style>
   </head>
   <body>
     <h1>Educational Blockchain Demo</h1>
+    <div class="clearfix"> <!-- Add clearfix container -->
+        <div id="transaction-form">
+            <h3>Create a Transaction</h3>
+            <input type="text" id="sender" placeholder="Sender" />
+            <input type="text" id="recipient" placeholder="Recipient" />
+            <input type="number" id="amount" placeholder="Amount" />
+            <button onclick="createTransaction()">Send Transaction</button>
+        </div>
+        <div id="mempool-container">
+            <h4>Transaction Pool (Mempool)</h4>
+            <div id="mempool-list">
+                <!-- Pending transactions will appear here -->
+                <p><small>No pending transactions.</small></p>
+            </div>
+        </div>
+    </div>
+
     <div>
       <button onclick="loadChain()">Load/Refresh Chain</button>
       <button onclick="switchToPoW()">Switch to PoW</button>
       <button onclick="switchToBFT()">Switch to BFT</button>
       <button onclick="switchToPoS()">Switch to PoS</button>
-    </div>
-    <div>
-      <h3>Create a Transaction</h3>
-      <input type="text" id="sender" placeholder="Sender" />
-      <input type="text" id="recipient" placeholder="Recipient" />
-      <input type="number" id="amount" placeholder="Amount" />
-      <button onclick="createTransaction()">Send Transaction</button>
     </div>
     <div>
       <h3>Consensus Actions</h3>
@@ -180,6 +225,7 @@
             <h5>Create Block</h5>
             <button onclick="createPosBlock()">Create Block (Auto-select Validator)</button>
             <button onclick="createPosBlockWithValidator()">Create Block with Selected Validator</button>
+            <button onclick="simulatePosMalice()" style="background-color: #ffdddd; border-color: #f88;">Simulate Malice (Selected Validator)</button>
         </div>
     </div>
 

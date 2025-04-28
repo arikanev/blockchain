@@ -100,6 +100,11 @@ def set_consensus_mode():
     CONSENSUS_MODE = mode
     return jsonify({"message": f"Consensus mode set to {mode}"}), 200
 
+@app.route("/mempool", methods=["GET"])
+def get_mempool():
+    """Returns the list of pending transactions."""
+    return jsonify({"transactions": blockchain.current_transactions}), 200
+
 @app.route("/bft/validators", methods=["GET"])
 def get_bft_validators():
     if CONSENSUS_MODE != "bft":
@@ -132,7 +137,7 @@ def bft_vote():
     if CONSENSUS_MODE != "bft":
         return jsonify({"error": "Not in BFT mode"}), 400
     
-    votes = bft_consensus.simulate_votes()
+    votes = bft_consensus.simulate_votes(blockchain)
     if votes is None:
         return jsonify({"error": "No active proposal to vote on. Please propose first."}), 400
         
@@ -244,6 +249,23 @@ def pos_create_block():
             "message": message,
             "block": new_block.to_dict()
         }), 200
+    else:
+        return jsonify({"error": message}), 400
+
+@app.route("/pos/simulate_malice", methods=["POST"])
+def simulate_pos_malice():
+    """Simulate a validator attempting malice, triggering slashing."""
+    if CONSENSUS_MODE != "pos":
+        return jsonify({"error": "Not in PoS mode"}), 400
+
+    values = request.get_json()
+    validator = values.get("validator")
+    if not validator:
+        return jsonify({"error": "Missing 'validator' in request"}), 400
+
+    success, message = pos_consensus.handle_malicious_attempt(validator)
+    if success:
+        return jsonify({"message": message}), 200
     else:
         return jsonify({"error": message}), 400
 

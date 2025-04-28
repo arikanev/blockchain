@@ -4,6 +4,7 @@ import random
 import hashlib
 from blockchain import Block
 from stake import StakeManager
+from typing import Tuple
 
 DIFFICULTY_PREFIX = "0000"  # Low difficulty for faster demonstration
 
@@ -72,6 +73,8 @@ class TendermintBFT:
         # Temporary storage for demo purposes (Not suitable for real apps)
         self.current_proposal = None
         self.current_votes = None
+        self.MAX_BLOCK_SIZE = 1024 * 1024  # 1MB
+        self.MAX_TIMESTAMP_DRIFT = 300  # 5 minutes
 
     def propose_block(self, blockchain):
         """
@@ -104,25 +107,83 @@ class TendermintBFT:
 
         return self.current_proposal # Return the proposal details
 
-    def simulate_votes(self):
+    def validate_proposal(self, blockchain, block: Block, proposer: str) -> Tuple[bool, str]:
+        """
+        Validates a block proposal before voting.
+        Returns (is_valid, reason).
+        """
+        # 1. Check block structure
+        if block.index != len(blockchain.chain):
+            return False, "Invalid block index"
+        
+        if block.previous_hash != blockchain.get_last_block().hash:
+            return False, "Invalid previous block hash"
+
+        # Check timestamp (not in future, not too old)
+        current_time = time.time()
+        if block.timestamp > current_time + self.MAX_TIMESTAMP_DRIFT:
+            return False, "Block timestamp too far in future"
+        if block.timestamp < current_time - self.MAX_TIMESTAMP_DRIFT:
+            return False, "Block timestamp too old"
+
+        # 2. Check proposer validity
+        expected_proposer = self.validators[self.round_robin_index]
+        if proposer != expected_proposer:
+            return False, f"Invalid proposer. Expected {expected_proposer}, got {proposer}"
+
+        # 3. Check block size
+        block_size = len(json.dumps(block.to_dict()).encode())
+        if block_size > self.MAX_BLOCK_SIZE:
+            return False, "Block size too large"
+
+        # 4. Validate transactions
+        seen_txs = set()  # For duplicate detection
+        for tx in block.transactions:
+            # Skip validation for reward transactions
+            if tx.get('sender') == 'NETWORK':
+                continue
+
+            # Check for duplicate transactions
+            tx_hash = hashlib.sha256(json.dumps(tx, sort_keys=True).encode()).hexdigest()
+            if tx_hash in seen_txs:
+                return False, "Duplicate transaction detected"
+            seen_txs.add(tx_hash)
+
+            # In a real system, we would also:
+            # - Verify transaction signatures
+            # - Check sender balances
+            # - Verify transaction format
+            # - Check for double-spending against chain history
+
+        # 5. Verify block hash
+        if block.hash != block.compute_hash():
+            return False, "Invalid block hash"
+
+        return True, "Block is valid"
+
+    def simulate_votes(self, blockchain):
         """
         Simulates validators voting on the current proposal.
-        Requires propose_block to have been called first.
-        Returns a dictionary of votes: {validator: 'yes'/'no'}.
+        Now includes actual validation before voting.
         """
         if not self.current_proposal:
-            return None # No proposal to vote on
+            return None  # No proposal to vote on
 
         votes = {}
+        block = self.current_proposal['block']
+        proposer = self.current_proposal['proposer']
+
         for val in self.validators:
-            # Simulate voting logic (e.g., random chance)
-            # Could be modified later to simulate faults
-            if random.random() > 0.1: # 90% chance to vote yes
+            # Actually validate the block before voting
+            is_valid, reason = self.validate_proposal(blockchain, block, proposer)
+            
+            if is_valid:
                 votes[val] = 'yes'
             else:
                 votes[val] = 'no'
+                print(f"Validator {val} voted NO: {reason}")
 
-        self.current_votes = votes # Store votes (demo only)
+        self.current_votes = votes
         return self.current_votes
 
     def commit_block(self, blockchain):
@@ -258,3 +319,22 @@ class ProofOfStake:
             return new_block, f"Block created by validator {validator_address} (stake: {stake})"
         
         return None, "Failed to add block to chain"
+
+    def handle_malicious_attempt(self, validator: str) -> Tuple[bool, str]:
+        """
+        Simulates a validator being caught attempting malice and slashes them.
+        Returns (success, message).
+        """
+        if not self.stake_manager.is_validator(validator):
+            return False, f"Address {validator} is not an active validator."
+        
+        print(f"[PoS Simulation] Simulating malicious attempt by {validator}...")
+        # In a real system, proof of malice would be required.
+        # Here we just directly slash.
+        success, slashed_amount = self.stake_manager.slash_stake(validator)
+        
+        if success:
+            message = f"Malice detected! Slashed {slashed_amount:.2f} stake from {validator}."
+            return True, message
+        else:
+            return False, f"Failed to slash {validator}."
